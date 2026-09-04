@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STL Ağırlık Merkezi Hesaplayıcı</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col md:flex-row h-screen overflow-hidden">
+
+    <div class="w-full md:w-1/3 p-6 bg-slate-800 flex flex-col gap-6 shadow-xl border-r border-slate-700 z-10 overflow-y-auto">
+        <div>
+            <h1 class="text-2xl font-bold text-indigo-400">STL Center of Mass</h1>
+            <p class="text-slate-400 text-sm mt-1">3D modellerinizin kütle ve ağırlık merkezini canlı hesaplayın.</p>
+        </div>
+
+        <div class="flex flex-col gap-2">
+            <label class="block text-sm font-medium text-slate-300">STL Dosyası Seçin</label>
+            <input type="file" id="stlFile" accept=".stl" class="file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 text-slate-400 bg-slate-900 rounded-lg border border-slate-700 cursor-pointer">
+            <button onclick="uploadAndAnalyze()" id="btnSubmit" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 font-semibold py-2 px-4 rounded-lg transition duration-200 shadow-lg">
+                Analiz Et
+            </button>
+        </div>
+
+        <div id="loading" class="hidden flex-col items-center justify-center p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mb-2"></div>
+            <p class="text-sm text-indigo-300 font-medium">Render API Analiz Ediyor...</p>
+            <p class="text-xs text-slate-500 text-center mt-1">Sunucu uykuda ise ilk istek 30-40 sn sürebilir.</p>
+        </div>
+
+        <div id="results" class="hidden flex-col gap-4 bg-slate-900 p-4 rounded-lg border border-slate-700">
+            <h2 class="text-lg font-semibold text-emerald-400 border-b border-slate-800 pb-2">Analiz Sonuçları</h2>
+            
+            <div class="flex justify-between items-center">
+                <span class="text-slate-400 text-sm">Hacim:</span>
+                <span id="resVolume" class="font-mono text-white font-bold">0 cm³</span>
+            </div>
+
+            <div class="space-y-2">
+                <span class="text-slate-400 text-sm block">Ağırlık Merkezi (Center of Mass):</span>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div class="bg-slate-800 p-2 rounded border border-slate-700">
+                        <span class="text-xs text-red-400 font-bold block">X</span>
+                        <span id="resX" class="font-mono text-sm">0 mm</span>
+                    </div>
+                    <div class="bg-slate-800 p-2 rounded border border-slate-700">
+                        <span class="text-xs text-green-400 font-bold block">Y</span>
+                        <span id="resY" class="font-mono text-sm">0 mm</span>
+                    </div>
+                    <div class="bg-slate-800 p-2 rounded border border-slate-700">
+                        <span class="text-xs text-blue-400 font-bold block">Z</span>
+                        <span id="resZ" class="font-mono text-sm">0 mm</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container" class="w-full md:w-2/3 h-full relative bg-slate-950">
+        <div class="absolute top-4 right-4 bg-slate-900/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-400 border border-slate-700">
+            🔴 Kırmızı Küre = Ağırlık Merkezi
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://stl-center-of-mass.onrender.com/analyze";
+        let scene, camera, renderer, controls, currentMesh, cogSphere;
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020617);
+
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(100, 100, 100);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // Işıklandırma
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight1.position.set(1, 1, 1);
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
+            dirLight2.position.set(-1, -1, -1);
+            scene.add(dirLight2);
+
+            // Eksen Göstergesi (X: Kırmızı, Y: Yeşil, Z: Mavi)
+            const axesHelper = new THREE.AxesHelper(30);
+            scene.add(axesHelper);
+
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        async function uploadAndAnalyze() {
+            const fileInput = document.getElementById('stlFile');
+            if (!fileInput.files[0]) {
+                alert("Lütfen bir STL dosyası seçin.");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // UI Güncelleme
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('loading').classList.add('flex');
+            document.getElementById('results').classList.add('hidden');
+            document.getElementById('btnSubmit').disabled = true;
+
+            try {
+                // Render API Çağrısı
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error("Analiz sırasında hata oluştu.");
+                const data = await response.json();
+
+                // Sonuçları Ekran Bas
+                document.getElementById('resVolume').innerText = `${data.volume_cm3} cm³`;
+                document.getElementById('resX').innerText = `${data.center_of_mass.x_mm} mm`;
+                document.getElementById('resY').innerText = `${data.center_of_mass.y_mm} mm`;
+                document.getElementById('resZ').innerText = `${data.center_of_mass.z_mm} mm`;
+                document.getElementById('results').classList.remove('hidden');
+
+                // 3D Görselleştirme
+                render3DModel(file, data.center_of_mass);
+
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('loading').classList.remove('flex');
+                document.getElementById('btnSubmit').disabled = false;
+            }
+        }
+
+        function render3DModel(file, cog) {
+            if (currentMesh) scene.remove(currentMesh);
+            if (cogSphere) scene.remove(cogSphere);
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const loader = new THREE.STLLoader();
+                const geometry = loader.parse(e.target.result);
+                
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: 0x6366f1, 
+                    roughness: 0.4, 
+                    metalness: 0.2 
+                });
+                currentMesh = new THREE.Mesh(geometry, material);
+                scene.add(currentMesh);
+
+                // Ağırlık Merkezine Kırmızı Küre Ekle
+                geometry.computeBoundingSphere();
+                const radius = geometry.boundingSphere.radius * 0.04; // Küre boyutlandırması
+                
+                const sphereGeo = new THREE.SphereGeometry(radius, 32, 32);
+                const sphereMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+                cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
+                
+                // Koordinatları yerleştir
+                cogSphere.position.set(cog.x_mm, cog.y_mm, cog.z_mm);
+                scene.add(cogSphere);
+
+                // Kamerayı Odakla
+                const center = geometry.boundingSphere.center;
+                controls.target.copy(center);
+                camera.position.set(center.x + geometry.boundingSphere.radius * 2, center.y + geometry.boundingSphere.radius * 2, center.z + geometry.boundingSphere.radius * 2);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        init3D();
+    </script>
+</body>
+</html>
