@@ -24,16 +24,9 @@
         <div class="flex flex-col gap-2">
             <label class="block text-sm font-medium text-slate-300">STL Dosyası Seçin</label>
             <input type="file" id="stlFile" accept=".stl" class="file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 text-slate-400 bg-slate-900 rounded-lg border border-slate-700 cursor-pointer">
-            <button onclick="uploadAndAnalyze()" id="btnSubmit" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 font-semibold py-2 px-4 rounded-lg transition duration-200 shadow-lg">
+            <button onclick="processSTL()" id="btnSubmit" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 font-semibold py-2 px-4 rounded-lg transition duration-200 shadow-lg">
                 Analiz Et
             </button>
-        </div>
-
-        <!-- Loading Durumu -->
-        <div id="loading" class="hidden flex-col items-center justify-center p-4 bg-slate-900/50 rounded-lg border border-slate-700">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mb-2"></div>
-            <p class="text-sm text-indigo-300 font-medium">Render API Analiz Ediyor...</p>
-            <p class="text-xs text-slate-500 text-center mt-1">Sunucu uykuda ise ilk istek 30-40 sn sürebilir.</p>
         </div>
 
         <!-- Sonuç Kartı -->
@@ -41,7 +34,7 @@
             <h2 class="text-lg font-semibold text-emerald-400 border-b border-slate-800 pb-2">Analiz Sonuçları</h2>
             
             <div class="flex justify-between items-center">
-                <span class="text-slate-400 text-sm">Hacim:</span>
+                <span class="text-slate-400 text-sm">Tahmini Hacim:</span>
                 <span id="resVolume" class="font-mono text-white font-bold">0 cm³</span>
             </div>
 
@@ -67,7 +60,6 @@
 
     <!-- Sağ 3D Viewport -->
     <div id="canvas-container" class="w-full md:w-2/3 h-full relative bg-slate-950">
-        <!-- Bilgi ve Mod Değiştirme Paneli -->
         <div class="absolute top-4 right-4 flex flex-col gap-2 items-end z-20">
             <div class="bg-slate-900/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-300 border border-slate-700 shadow-md">
                 🔴 Kırmızı Küre = Ağırlık Merkezi
@@ -79,7 +71,6 @@
     </div>
 
     <script>
-        const API_URL = "https://stl-center-of-mass.onrender.com/analyze";
         let scene, camera, renderer, controls, currentMesh, cogSphere;
         let isWireframe = false;
 
@@ -89,7 +80,7 @@
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x020617);
 
-            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 10000);
             camera.position.set(100, 100, 100);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -99,8 +90,7 @@
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
 
-            // Işıklandırma
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(ambientLight);
 
             const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -110,10 +100,6 @@
             const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
             dirLight2.position.set(-1, -1, -1);
             scene.add(dirLight2);
-
-            // Eksen Göstergesi (X: Kırmızı, Y: Yeşil, Z: Mavi)
-            const axesHelper = new THREE.AxesHelper(30);
-            scene.add(axesHelper);
 
             window.addEventListener('resize', onWindowResize);
             animate();
@@ -132,7 +118,46 @@
             renderer.setSize(container.clientWidth, container.clientHeight);
         }
 
-        async function uploadAndAnalyze() {
+        // Tarayıcı içi matematiksel Hacim ve Ağırlık Merkezi hesabı (Diverjans Teoremi)
+        function calculateVolumeAndCOG(geometry) {
+            let totalVolume = 0;
+            let cog = new THREE.Vector3(0, 0, 0);
+
+            const pos = geometry.attributes.position;
+            const p1 = new THREE.Vector3(), p2 = new THREE.Vector3(), p3 = new THREE.Vector3();
+
+            for (let i = 0; i < pos.count; i += 3) {
+                p1.fromBufferAttribute(pos, i);
+                p2.fromBufferAttribute(pos, i + 1);
+                p3.fromBufferAttribute(pos, i + 2);
+
+                // Signed volume of tetrahedron
+                const v321 = p3.x * p2.y * p1.z;
+                const v231 = p2.x * p3.y * p1.z;
+                const v312 = p3.x * p1.y * p2.z;
+                const v132 = p1.x * p3.y * p2.z;
+                const v213 = p2.x * p1.y * p3.z;
+                const v123 = p1.x * p2.y * p3.z;
+
+                const vTetra = (-v321 + v231 + v312 - v132 - v213 + v123) / 6.0;
+                totalVolume += vTetra;
+
+                // Center of mass contribution
+                const cTetra = new THREE.Vector3().add(p1).add(p2).add(p3).multiplyScalar(0.25);
+                cog.add(cTetra.multiplyScalar(vTetra));
+            }
+
+            if (totalVolume !== 0) {
+                cog.divideScalar(totalVolume);
+            }
+
+            return {
+                volume_cm3: Math.abs(totalVolume) / 1000.0,
+                cog: cog
+            };
+        }
+
+        function processSTL() {
             const fileInput = document.getElementById('stlFile');
             if (!fileInput.files[0]) {
                 alert("Lütfen bir STL dosyası seçin.");
@@ -140,54 +165,27 @@
             }
 
             const file = fileInput.files[0];
-            const formData = new FormData();
-            formData.append('file', file);
-
-            // UI Güncelleme
-            document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('loading').classList.add('flex');
-            document.getElementById('results').classList.add('hidden');
-            document.getElementById('btnSubmit').disabled = true;
-
-            try {
-                // Render API Çağrısı
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) throw new Error("Analiz sırasında hata oluştu.");
-                const data = await response.json();
-
-                // Sonuçları Ekran Bas
-                document.getElementById('resVolume').innerText = `${data.volume_cm3} cm³`;
-                document.getElementById('resX').innerText = `${data.center_of_mass.x_mm} mm`;
-                document.getElementById('resY').innerText = `${data.center_of_mass.y_mm} mm`;
-                document.getElementById('resZ').innerText = `${data.center_of_mass.z_mm} mm`;
-                document.getElementById('results').classList.remove('hidden');
-
-                // 3D Görselleştirme
-                render3DModel(file, data.center_of_mass);
-
-            } catch (err) {
-                alert(err.message);
-            } finally {
-                document.getElementById('loading').classList.add('hidden');
-                document.getElementById('loading').classList.remove('flex');
-                document.getElementById('btnSubmit').disabled = false;
-            }
-        }
-
-        function render3DModel(file, cog) {
-            if (currentMesh) scene.remove(currentMesh);
-            if (cogSphere) scene.remove(cogSphere);
-
             const reader = new FileReader();
+
             reader.onload = function (e) {
                 const loader = new THREE.STLLoader();
                 const geometry = loader.parse(e.target.result);
-                
-                // Yarı saydam materyal (Ağırlık merkezinin içeriden görünmesini sağlar)
+
+                // Hacim ve Ağırlık Merkezi Hesabı
+                const res = calculateVolumeAndCOG(geometry);
+
+                // Ekrana Verileri Yaz
+                document.getElementById('resVolume').innerText = `${res.volume_cm3.toFixed(2)} cm³`;
+                document.getElementById('resX').innerText = `${res.cog.x.toFixed(2)} mm`;
+                document.getElementById('resY').innerText = `${res.cog.y.toFixed(2)} mm`;
+                document.getElementById('resZ').innerText = `${res.cog.z.toFixed(2)} mm`;
+                document.getElementById('results').classList.remove('hidden');
+
+                // 3D Sahneyi Temizle
+                if (currentMesh) scene.remove(currentMesh);
+                if (cogSphere) scene.remove(cogSphere);
+
+                // Modeli Oluştur
                 const material = new THREE.MeshStandardMaterial({ 
                     color: 0x6366f1, 
                     roughness: 0.3, 
@@ -200,31 +198,34 @@
                 currentMesh = new THREE.Mesh(geometry, material);
                 scene.add(currentMesh);
 
-                // Ağırlık Merkezine Parlak Kırmızı Küre Ekle
+                // Modeli Tam Merkeze ve Kamera Görüş Açısına Oturtma
+                geometry.computeBoundingBox();
                 geometry.computeBoundingSphere();
-                const radius = geometry.boundingSphere.radius * 0.04;
                 
-                const sphereGeo = new THREE.SphereGeometry(radius, 32, 32);
+                const boundingBox = geometry.boundingBox;
+                const radius = geometry.boundingSphere.radius;
+                
+                // Kırmızı Küre (Ağırlık Merkezi İşaretçisi)
+                const sphereGeo = new THREE.SphereGeometry(radius * 0.03, 32, 32);
                 const sphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
                 cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
-                
-                // Kürenin pozisyonunu koy
-                cogSphere.position.set(cog.x_mm, cog.y_mm, cog.z_mm);
+                cogSphere.position.copy(res.cog);
                 scene.add(cogSphere);
 
-                // Kamerayı Odakla
+                // Kamerayı Otomatik Odakla
                 const center = geometry.boundingSphere.center;
                 controls.target.copy(center);
-                camera.position.set(
-                    center.x + geometry.boundingSphere.radius * 2, 
-                    center.y + geometry.boundingSphere.radius * 2, 
-                    center.z + geometry.boundingSphere.radius * 2
-                );
+
+                // Kamerayı modele göre dinamik mesafeye konumlandır
+                const distance = radius * 3;
+                camera.position.set(center.x + distance, center.y + distance, center.z + distance);
+                camera.lookAt(center);
+                controls.update();
             };
+
             reader.readAsArrayBuffer(file);
         }
 
-        // Şeffaflık ve Tel Kafes arasında geçiş yapma fonksiyonu
         function toggleWireframe() {
             if (!currentMesh) return;
             isWireframe = !isWireframe;
