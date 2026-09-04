@@ -1,1 +1,16 @@
-//
+# Python önbellek dosyaları
+__pycache__/
+*.py[cod]
+
+# Sanal ortamlar (Virtual Environment)
+venv/
+env/
+.venv/
+
+# IDE ayarları
+.vscode/
+.idea/
+
+# Büyük veya geçici test dosyaları
+*.stl
+!sample_data/*.stl
