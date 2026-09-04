@@ -25,15 +25,15 @@
         <div class="flex flex-col gap-2">
             <label class="block text-sm font-medium text-slate-300">STL Dosyası Seçin</label>
             <input type="file" id="stlFile" accept=".stl" class="file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 text-slate-400 bg-slate-900 rounded-lg border border-slate-700 cursor-pointer">
-            <button onclick="uploadAndAnalyze()" id="btnSubmit" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 font-semibold py-2 px-4 rounded-lg transition duration-200 shadow-lg">
+            <button onclick="processSTL()" id="btnSubmit" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 font-semibold py-2 px-4 rounded-lg transition duration-200 shadow-lg">
                 Analiz Et
             </button>
         </div>
 
-        <!-- Loading Durumu -->
+        <!-- Loading Göstergesi -->
         <div id="loading" class="hidden flex-col items-center justify-center p-4 bg-slate-900/50 rounded-lg border border-slate-700">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mb-2"></div>
-            <p class="text-sm text-indigo-300 font-medium">STL Analiz Ediliyor...</p>
+            <p class="text-sm text-indigo-300 font-medium">Hesaplanıyor...</p>
         </div>
 
         <!-- Sonuç Kartı -->
@@ -83,7 +83,6 @@
     </div>
 
     <script>
-        const API_URL = "/analyze";
         let scene, camera, renderer, controls, currentMesh, cogSphere;
         let isWireframe = false;
         let uploadedFileName = "model";
@@ -97,7 +96,7 @@
             camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 10000);
             camera.position.set(100, 100, 100);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
             renderer.setSize(container.clientWidth, container.clientHeight);
             container.appendChild(renderer.domElement);
 
@@ -132,111 +131,134 @@
             renderer.setSize(container.clientWidth, container.clientHeight);
         }
 
-        async function uploadAndAnalyze() {
+        // Optimize edilmiş Diverjans Teoremi ile Kütle & Ağırlık Merkezi Hesabı
+        function calculateVolumeAndCOG(geometry) {
+            let totalVolume = 0;
+            let cogX = 0, cogY = 0, cogZ = 0;
+
+            const pos = geometry.attributes.position.array;
+            const count = pos.length;
+
+            // Direct array loop for maximum execution speed
+            for (let i = 0; i < count; i += 9) {
+                const x1 = pos[i],     y1 = pos[i+1], z1 = pos[i+2];
+                const x2 = pos[i+3],   y2 = pos[i+4], z2 = pos[i+5];
+                const x3 = pos[i+6],   y3 = pos[i+7], z3 = pos[i+8];
+
+                const v321 = x3 * y2 * z1;
+                const v231 = x2 * y3 * z1;
+                const v312 = x3 * y1 * z2;
+                const v132 = x1 * y3 * z2;
+                const v213 = x2 * y1 * z3;
+                const v123 = x1 * y2 * z3;
+
+                const vTetra = (-v321 + v231 + v312 - v132 - v213 + v123) / 6.0;
+                totalVolume += vTetra;
+
+                const cx = (x1 + x2 + x3) * 0.25;
+                const cy = (y1 + y2 + y3) * 0.25;
+                const cz = (z1 + z2 + z3) * 0.25;
+
+                cogX += cx * vTetra;
+                cogY += cy * vTetra;
+                cogZ += cz * vTetra;
+            }
+
+            if (totalVolume !== 0) {
+                cogX /= totalVolume;
+                cogY /= totalVolume;
+                cogZ /= totalVolume;
+            }
+
+            return {
+                volume_cm3: Math.abs(totalVolume) / 1000.0,
+                cog: new THREE.Vector3(cogX, cogY, cogZ)
+            };
+        }
+
+        function processSTL() {
             const fileInput = document.getElementById('stlFile');
             if (!fileInput.files[0]) {
                 alert("Lütfen bir STL dosyası seçin.");
                 return;
             }
 
-            const file = fileInput.files[0];
-            uploadedFileName = file.name.replace(/\.[^/.]+$/, ""); // Dosya adını uzantısız al
-            const formData = new FormData();
-            formData.append('file', file);
-
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('loading').classList.add('flex');
-            document.getElementById('results').classList.add('hidden');
-            document.getElementById('btnSubmit').disabled = true;
 
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    body: formData
-                });
+            // Asenkron gecikme ekleyerek UI'ın donmasını önlüyoruz
+            setTimeout(() => {
+                const file = fileInput.files[0];
+                uploadedFileName = file.name.replace(/\.[^/.]+$/, "");
+                const reader = new FileReader();
 
-                if (!response.ok) throw new Error("Analiz sırasında hata oluştu.");
-                const data = await response.json();
+                reader.onload = function (e) {
+                    const loader = new THREE.STLLoader();
+                    const geometry = loader.parse(e.target.result);
 
-                document.getElementById('resVolume').innerText = `${data.volume_cm3} cm³`;
-                document.getElementById('resX').innerText = `${data.center_of_mass.x_mm} mm`;
-                document.getElementById('resY').innerText = `${data.center_of_mass.y_mm} mm`;
-                document.getElementById('resZ').innerText = `${data.center_of_mass.z_mm} mm`;
-                document.getElementById('results').classList.remove('hidden');
+                    // Yüksek hızlı hesaplama
+                    const res = calculateVolumeAndCOG(geometry);
 
-                render3DModel(file, data.center_of_mass);
+                    document.getElementById('resVolume').innerText = `${res.volume_cm3.toFixed(3)} cm³`;
+                    document.getElementById('resX').innerText = `${res.cog.x.toFixed(3)} mm`;
+                    document.getElementById('resY').innerText = `${res.cog.y.toFixed(3)} mm`;
+                    document.getElementById('resZ').innerText = `${res.cog.z.toFixed(3)} mm`;
 
-            } catch (err) {
-                alert(err.message);
-            } finally {
-                document.getElementById('loading').classList.add('hidden');
-                document.getElementById('loading').classList.remove('flex');
-                document.getElementById('btnSubmit').disabled = false;
-            }
+                    if (currentMesh) scene.remove(currentMesh);
+                    if (cogSphere) scene.remove(cogSphere);
+
+                    const material = new THREE.MeshStandardMaterial({ 
+                        color: 0x6366f1, 
+                        roughness: 0.3, 
+                        metalness: 0.2,
+                        transparent: true,
+                        opacity: 0.5,
+                        wireframe: isWireframe
+                    });
+                    
+                    currentMesh = new THREE.Mesh(geometry, material);
+                    scene.add(currentMesh);
+
+                    geometry.computeBoundingSphere();
+                    const radius = geometry.boundingSphere.radius;
+                    
+                    // Kırmızı Küre (Ağırlık Merkezi)
+                    const sphereGeo = new THREE.SphereGeometry(radius * 0.04, 16, 16);
+                    const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                    cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
+                    cogSphere.position.copy(res.cog);
+                    scene.add(cogSphere);
+
+                    // Kamera Pozisyonlama
+                    const center = geometry.boundingSphere.center;
+                    controls.target.copy(center);
+                    const distance = radius * 3;
+                    camera.position.set(center.x + distance, center.y + distance, center.z + distance);
+                    camera.lookAt(center);
+                    controls.update();
+
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('loading').classList.remove('flex');
+                    document.getElementById('results').classList.remove('hidden');
+                };
+
+                reader.readAsArrayBuffer(file);
+            }, 50);
         }
 
-        function render3DModel(file, cog) {
-            if (currentMesh) scene.remove(currentMesh);
-            if (cogSphere) scene.remove(cogSphere);
-
-            const reader = new FileReader();
-            reader.onload = function (e) {
-                const loader = new THREE.STLLoader();
-                const geometry = loader.parse(e.target.result);
-                
-                const material = new THREE.MeshStandardMaterial({ 
-                    color: 0x6366f1, 
-                    roughness: 0.3, 
-                    metalness: 0.2,
-                    transparent: true,
-                    opacity: 0.5,
-                    wireframe: isWireframe
-                });
-                
-                currentMesh = new THREE.Mesh(geometry, material);
-                scene.add(currentMesh);
-
-                geometry.computeBoundingBox();
-                geometry.computeBoundingSphere();
-                const radius = geometry.boundingSphere.radius;
-                
-                // Kırmızı Küreyi Hazırla
-                const sphereGeo = new THREE.SphereGeometry(radius * 0.04, 32, 32);
-                const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-                cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
-                
-                cogSphere.position.set(cog.x_mm, cog.y_mm, cog.z_mm);
-                scene.add(cogSphere);
-
-                // Kamerayı ve görüş açısını ayarla
-                const center = geometry.boundingSphere.center;
-                controls.target.copy(center);
-                const distance = radius * 3;
-                camera.position.set(center.x + distance, center.y + distance, center.z + distance);
-                camera.lookAt(center);
-                controls.update();
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        // Ana Model ile Kırmızı Küreyi Birlikte STL Olarak İndir
         function downloadCombinedSTL() {
             if (!currentMesh || !cogSphere) {
                 alert("İndirilecek model bulunamadı.");
                 return;
             }
 
-            // İki nesneyi tutacak geçici grup oluştur
             const exportGroup = new THREE.Group();
-            
-            // Nesnelerin kopyalarını ekle
             exportGroup.add(currentMesh.clone());
             exportGroup.add(cogSphere.clone());
 
             const exporter = new THREE.STLExporter();
             const result = exporter.parse(exportGroup, { binary: true });
 
-            // Tarayıcı üzerinden dosyayı indir
             const blob = new Blob([result], { type: 'application/octet-stream' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
