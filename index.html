@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STL Ağırlık Merkezi Hesaplayıcı</title>
+    <title>Bobblehead STL Ağırlık Merkezi & Denge Analizi</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Three.js, OrbitControls, STLLoader ve STLExporter -->
@@ -15,10 +15,10 @@
 <body class="bg-slate-900 text-white min-h-screen flex flex-col md:flex-row h-screen overflow-hidden">
 
     <!-- Sol Kontrol Paneli -->
-    <div class="w-full md:w-1/3 p-6 bg-slate-800 flex flex-col gap-6 shadow-xl border-r border-slate-700 z-10 overflow-y-auto">
+    <div class="w-full md:w-1/3 p-6 bg-slate-800 flex flex-col gap-5 shadow-xl border-r border-slate-700 z-10 overflow-y-auto">
         <div>
-            <h1 class="text-2xl font-bold text-indigo-400">STL Center of Mass</h1>
-            <p class="text-slate-400 text-sm mt-1">3D modellerinizin kütle ve ağırlık merkezini canlı hesaplayın.</p>
+            <h1 class="text-2xl font-bold text-indigo-400">Bobblehead Center of Mass</h1>
+            <p class="text-slate-400 text-sm mt-1">Sallanan kafa yay montajı ve denge hizalama aracı.</p>
         </div>
 
         <!-- Yükleme Alanı -->
@@ -26,7 +26,7 @@
             <label class="block text-sm font-medium text-slate-300">STL Dosyası Seçin</label>
             <input type="file" id="stlFile" accept=".stl" class="file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 text-slate-400 bg-slate-900 rounded-lg border border-slate-700 cursor-pointer">
             <button onclick="processSTL()" id="btnSubmit" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 font-semibold py-2 px-4 rounded-lg transition duration-200 shadow-lg">
-                Analiz Et
+                Analiz Et & Hizala
             </button>
         </div>
 
@@ -36,17 +36,38 @@
             <p class="text-sm text-indigo-300 font-medium">Hesaplanıyor...</p>
         </div>
 
+        <!-- Yay Ayarları Paneli -->
+        <div id="springControls" class="bg-slate-900/80 p-4 rounded-lg border border-slate-700 space-y-3">
+            <h3 class="text-sm font-semibold text-indigo-300 border-b border-slate-800 pb-1">⚙️ Yay Yuvası Ölçüleri</h3>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">Yay Çapı (mm)</label>
+                    <input type="number" id="springDiameter" value="6" step="0.5" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm font-mono text-center" onchange="updateSpringVisuals()">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">Yuva Derinliği (mm)</label>
+                    <input type="number" id="springDepth" value="12" step="1" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm font-mono text-center" onchange="updateSpringVisuals()">
+                </div>
+            </div>
+        </div>
+
         <!-- Sonuç Kartı -->
         <div id="results" class="hidden flex-col gap-4 bg-slate-900 p-4 rounded-lg border border-slate-700">
-            <h2 class="text-lg font-semibold text-emerald-400 border-b border-slate-800 pb-2">Analiz Sonuçları</h2>
+            <h2 class="text-lg font-semibold text-emerald-400 border-b border-slate-800 pb-2">Denge ve Ağırlık Analizi</h2>
             
             <div class="flex justify-between items-center">
                 <span class="text-slate-400 text-sm">Hacim:</span>
                 <span id="resVolume" class="font-mono text-white font-bold">0 cm³</span>
             </div>
 
+            <!-- Akıllı Denge Tavsiyesi -->
+            <div id="balanceAdvice" class="p-3 bg-amber-950/40 border border-amber-600/50 rounded-lg text-xs text-amber-200 space-y-1">
+                <span class="font-bold text-amber-400 block">⚠️ Denge Analizi:</span>
+                <p id="adviceText">Model analiz ediliyor...</p>
+            </div>
+
             <div class="space-y-2">
-                <span class="text-slate-400 text-sm block">Ağırlık Merkezi (Center of Mass):</span>
+                <span class="text-slate-400 text-sm block">Ağırlık Merkezi Pozisyonu:</span>
                 <div class="grid grid-cols-3 gap-2 text-center">
                     <div class="bg-slate-800 p-2 rounded border border-slate-700">
                         <span class="text-xs text-red-400 font-bold block">X</span>
@@ -65,7 +86,7 @@
 
             <!-- İndirme Butonu -->
             <button onclick="downloadCombinedSTL()" id="btnDownload" class="mt-2 w-full bg-emerald-600 hover:bg-emerald-500 font-semibold py-2.5 px-4 rounded-lg transition duration-200 shadow-lg flex items-center justify-center gap-2">
-                💾 Küre Eklenmiş STL'i İndir
+                💾 İşaretli & Yay Yuvam ile STL İndir
             </button>
         </div>
     </div>
@@ -73,8 +94,10 @@
     <!-- Sağ 3D Viewport -->
     <div id="canvas-container" class="w-full md:w-2/3 h-full relative bg-slate-950">
         <div class="absolute top-4 right-4 flex flex-col gap-2 items-end z-20">
-            <div class="bg-slate-900/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-300 border border-slate-700 shadow-md">
-                🔴 Kırmızı Küre = Ağırlık Merkezi
+            <div class="bg-slate-900/90 backdrop-blur px-3 py-2 rounded text-xs text-slate-300 border border-slate-700 shadow-md space-y-1">
+                <div>🔴 Kırmızı Küre = Ağırlık Merkezi</div>
+                <div>🟢 Yeşil Silindir = Önerilen Yay Yuvası</div>
+                <div>🟡 Sarı Çizgi = Çekül / Denge Hattı</div>
             </div>
             <button onclick="toggleWireframe()" class="bg-slate-800 hover:bg-slate-700 text-xs text-indigo-300 font-semibold px-3 py-1.5 rounded border border-slate-600 shadow transition">
                 Görünüm: <span id="viewModeText">Şeffaf (Transparent)</span>
@@ -83,9 +106,11 @@
     </div>
 
     <script>
-        let scene, camera, renderer, controls, currentMesh, cogSphere;
+        let scene, camera, renderer, controls, currentMesh, cogSphere, springMesh, plumbLine;
         let isWireframe = false;
-        let uploadedFileName = "model";
+        let uploadedFileName = "bobblehead_head";
+        let currentCOG = new THREE.Vector3();
+        let modelBounds = null;
 
         function init3D() {
             const container = document.getElementById('canvas-container');
@@ -131,7 +156,6 @@
             renderer.setSize(container.clientWidth, container.clientHeight);
         }
 
-        // Optimize edilmiş Diverjans Teoremi ile Kütle & Ağırlık Merkezi Hesabı
         function calculateVolumeAndCOG(geometry) {
             let totalVolume = 0;
             let cogX = 0, cogY = 0, cogZ = 0;
@@ -139,7 +163,6 @@
             const pos = geometry.attributes.position.array;
             const count = pos.length;
 
-            // Direct array loop for maximum execution speed
             for (let i = 0; i < count; i += 9) {
                 const x1 = pos[i],     y1 = pos[i+1], z1 = pos[i+2];
                 const x2 = pos[i+3],   y2 = pos[i+4], z2 = pos[i+5];
@@ -186,7 +209,6 @@
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('loading').classList.add('flex');
 
-            // Asenkron gecikme ekleyerek UI'ın donmasını önlüyoruz
             setTimeout(() => {
                 const file = fileInput.files[0];
                 uploadedFileName = file.name.replace(/\.[^/.]+$/, "");
@@ -196,17 +218,27 @@
                     const loader = new THREE.STLLoader();
                     const geometry = loader.parse(e.target.result);
 
-                    // Yüksek hızlı hesaplama
                     const res = calculateVolumeAndCOG(geometry);
+                    currentCOG = res.cog;
+
+                    geometry.computeBoundingBox();
+                    modelBounds = geometry.boundingBox;
+
+                    // Denge Tavsiyesi Üret
+                    generateBalanceAdvice(modelBounds, currentCOG);
 
                     document.getElementById('resVolume').innerText = `${res.volume_cm3.toFixed(3)} cm³`;
-                    document.getElementById('resX').innerText = `${res.cog.x.toFixed(3)} mm`;
-                    document.getElementById('resY').innerText = `${res.cog.y.toFixed(3)} mm`;
-                    document.getElementById('resZ').innerText = `${res.cog.z.toFixed(3)} mm`;
+                    document.getElementById('resX').innerText = `${res.cog.x.toFixed(2)} mm`;
+                    document.getElementById('resY').innerText = `${res.cog.y.toFixed(2)} mm`;
+                    document.getElementById('resZ').innerText = `${res.cog.z.toFixed(2)} mm`;
 
+                    // Temizlik
                     if (currentMesh) scene.remove(currentMesh);
                     if (cogSphere) scene.remove(cogSphere);
+                    if (springMesh) scene.remove(springMesh);
+                    if (plumbLine) scene.remove(plumbLine);
 
+                    // Ana Mesh
                     const material = new THREE.MeshStandardMaterial({ 
                         color: 0x6366f1, 
                         roughness: 0.3, 
@@ -215,24 +247,26 @@
                         opacity: 0.5,
                         wireframe: isWireframe
                     });
-                    
                     currentMesh = new THREE.Mesh(geometry, material);
                     scene.add(currentMesh);
 
                     geometry.computeBoundingSphere();
                     const radius = geometry.boundingSphere.radius;
                     
-                    // Kırmızı Küre (Ağırlık Merkezi)
-                    const sphereGeo = new THREE.SphereGeometry(radius * 0.04, 16, 16);
+                    // 1. Kırmızı Ağırlık Merkezi Küresi
+                    const sphereGeo = new THREE.SphereGeometry(radius * 0.03, 16, 16);
                     const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
                     cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
-                    cogSphere.position.copy(res.cog);
+                    cogSphere.position.copy(currentCOG);
                     scene.add(cogSphere);
+
+                    // 2 ve 3. Yay Yuvası ve Denge Hattını Çiz
+                    updateSpringVisuals();
 
                     // Kamera Pozisyonlama
                     const center = geometry.boundingSphere.center;
                     controls.target.copy(center);
-                    const distance = radius * 3;
+                    const distance = radius * 2.8;
                     camera.position.set(center.x + distance, center.y + distance, center.z + distance);
                     camera.lookAt(center);
                     controls.update();
@@ -246,8 +280,68 @@
             }, 50);
         }
 
+        // Denge Sapmalarını Analiz Etme
+        function generateBalanceAdvice(bounds, cog) {
+            const geoCenter = new THREE.Vector3();
+            bounds.getCenter(geoCenter);
+
+            const dx = cog.x - geoCenter.x;
+            const dy = cog.y - geoCenter.y;
+
+            let advice = [];
+
+            if (Math.abs(dx) > 1.5) {
+                advice.push(`Ağırlık merkezi X ekseninde <b>${Math.abs(dx).toFixed(1)}mm ${dx > 0 ? 'Sağa' : 'Sola'}</b> kaymış.`);
+            }
+            if (Math.abs(dy) > 1.5) {
+                advice.push(`Ağırlık merkezi Y ekseninde <b>${Math.abs(dy).toFixed(1)}mm ${dy > 0 ? 'Öne' : 'Arkaya'}</b> kaymış.`);
+            }
+
+            const adviceBox = document.getElementById('adviceText');
+            if (advice.length === 0) {
+                adviceBox.innerHTML = "✅ Kafa dengesi harika! Ağırlık merkezi tam ortada, serbest bırakıldığında dik duracaktır.";
+            } else {
+                adviceBox.innerHTML = advice.join("<br>") + "<br>💡 <i>Yay yuvasını bu kayma yönüne doğru açarsanız kafa tam düz durur.</i>";
+            }
+        }
+
+        // Yay Yuvası ve Denge Çizgisini Güncelleme
+        function updateSpringVisuals() {
+            if (!currentMesh || !modelBounds) return;
+
+            if (springMesh) scene.remove(springMesh);
+            if (plumbLine) scene.remove(plumbLine);
+
+            const d = parseFloat(document.getElementById('springDiameter').value) || 6;
+            const h = parseFloat(document.getElementById('springDepth').value) || 12;
+
+            // 1. Yeşil Yay Yuvası Silindiri
+            const cylinderGeo = new THREE.CylinderGeometry(d / 2, d / 2, h, 16);
+            const cylinderMat = new THREE.MeshStandardMaterial({ color: 0x10b981, wireframe: false });
+            springMesh = new THREE.Mesh(cylinderGeo, cylinderMat);
+            
+            // Yuvanın üst noktası tam ağırlık merkezinde olacak şekilde hizala
+            springMesh.position.set(currentCOG.x, currentCOG.y - (h / 2), currentCOG.z);
+            scene.add(springMesh);
+
+            // 2. Dikey Çekül / Denge Çizgisi (Sarı Kesikli Çizgi)
+            const linePoints = [
+                currentCOG,
+                new THREE.Vector3(currentCOG.x, modelBounds.min.z - 20, currentCOG.z)
+            ];
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
+            const lineMat = new THREE.LineDashedMaterial({
+                color: 0xfacc15,
+                dashSize: 2,
+                gapSize: 1,
+            });
+            plumbLine = new THREE.Line(lineGeo, lineMat);
+            plumbLine.computeLineDistances();
+            scene.add(plumbLine);
+        }
+
         function downloadCombinedSTL() {
-            if (!currentMesh || !cogSphere) {
+            if (!currentMesh || !cogSphere || !springMesh) {
                 alert("İndirilecek model bulunamadı.");
                 return;
             }
@@ -255,6 +349,7 @@
             const exportGroup = new THREE.Group();
             exportGroup.add(currentMesh.clone());
             exportGroup.add(cogSphere.clone());
+            exportGroup.add(springMesh.clone());
 
             const exporter = new THREE.STLExporter();
             const result = exporter.parse(exportGroup, { binary: true });
@@ -262,7 +357,7 @@
             const blob = new Blob([result], { type: 'application/octet-stream' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `${uploadedFileName}_with_center_of_mass.stl`;
+            link.download = `${uploadedFileName}_with_spring_socket.stl`;
             link.click();
         }
 
