@@ -36,9 +36,23 @@
             <p class="text-sm text-indigo-300 font-medium">Hesaplanıyor...</p>
         </div>
 
-        <!-- Yay Ayarları Paneli -->
-        <div id="springControls" class="bg-slate-900/80 p-4 rounded-lg border border-slate-700 space-y-3">
-            <h3 class="text-sm font-semibold text-indigo-300 border-b border-slate-800 pb-1">⚙️ Yay Yuvası Ölçüleri</h3>
+        <!-- Yay ve Yön Ayarları Paneli -->
+        <div id="springControls" class="bg-slate-900/80 p-4 rounded-lg border border-slate-700 space-y-4">
+            <h3 class="text-sm font-semibold text-indigo-300 border-b border-slate-800 pb-1">⚙️ Yay Yuvası & Boyun Yönü</h3>
+            
+            <!-- Boyun/Yay Çıkış Yönü Seçimi -->
+            <div>
+                <label class="text-xs text-slate-400 block mb-1 font-medium">Boyun/Yay Çıkış Yönü:</label>
+                <select id="neckDirection" onchange="updateSpringVisuals()" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm font-semibold text-emerald-400 focus:outline-none focus:border-indigo-500">
+                    <option value="-Z" selected>Aşağı (-Z Eksenı)</option>
+                    <option value="+Z">Yukarı (+Z Ekseni)</option>
+                    <option value="-Y">Aşağı (-Y Ekseni)</option>
+                    <option value="+Y">Yukarı (+Y Ekseni)</option>
+                    <option value="-X">Sol (-X Ekseni)</option>
+                    <option value="+X">Sağ (+X Ekseni)</option>
+                </select>
+            </div>
+
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="text-xs text-slate-400 block mb-1">Yay Çapı (mm)</label>
@@ -96,7 +110,7 @@
         <div class="absolute top-4 right-4 flex flex-col gap-2 items-end z-20">
             <div class="bg-slate-900/90 backdrop-blur px-3 py-2 rounded text-xs text-slate-300 border border-slate-700 shadow-md space-y-1">
                 <div>🔴 Kırmızı Küre = Ağırlık Merkezi</div>
-                <div>🟢 Yeşil Silindir = Önerilen Yay Yuvası</div>
+                <div>🟢 Yeşil Silindir = Seçilen Yöne Yay Yuvası</div>
                 <div>🟡 Sarı Çizgi = Çekül / Denge Hattı</div>
             </div>
             <button onclick="toggleWireframe()" class="bg-slate-800 hover:bg-slate-700 text-xs text-indigo-300 font-semibold px-3 py-1.5 rounded border border-slate-600 shadow transition">
@@ -224,7 +238,6 @@
                     geometry.computeBoundingBox();
                     modelBounds = geometry.boundingBox;
 
-                    // Denge Tavsiyesi Üret
                     generateBalanceAdvice(modelBounds, currentCOG);
 
                     document.getElementById('resVolume').innerText = `${res.volume_cm3.toFixed(3)} cm³`;
@@ -232,13 +245,11 @@
                     document.getElementById('resY').innerText = `${res.cog.y.toFixed(2)} mm`;
                     document.getElementById('resZ').innerText = `${res.cog.z.toFixed(2)} mm`;
 
-                    // Temizlik
                     if (currentMesh) scene.remove(currentMesh);
                     if (cogSphere) scene.remove(cogSphere);
                     if (springMesh) scene.remove(springMesh);
                     if (plumbLine) scene.remove(plumbLine);
 
-                    // Ana Mesh
                     const material = new THREE.MeshStandardMaterial({ 
                         color: 0x6366f1, 
                         roughness: 0.3, 
@@ -253,17 +264,14 @@
                     geometry.computeBoundingSphere();
                     const radius = geometry.boundingSphere.radius;
                     
-                    // 1. Kırmızı Ağırlık Merkezi Küresi
                     const sphereGeo = new THREE.SphereGeometry(radius * 0.03, 16, 16);
                     const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
                     cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
                     cogSphere.position.copy(currentCOG);
                     scene.add(cogSphere);
 
-                    // 2 ve 3. Yay Yuvası ve Denge Hattını Çiz
                     updateSpringVisuals();
 
-                    // Kamera Pozisyonlama
                     const center = geometry.boundingSphere.center;
                     controls.target.copy(center);
                     const distance = radius * 2.8;
@@ -280,7 +288,6 @@
             }, 50);
         }
 
-        // Denge Sapmalarını Analiz Etme
         function generateBalanceAdvice(bounds, cog) {
             const geoCenter = new THREE.Vector3();
             bounds.getCenter(geoCenter);
@@ -299,13 +306,13 @@
 
             const adviceBox = document.getElementById('adviceText');
             if (advice.length === 0) {
-                adviceBox.innerHTML = "✅ Kafa dengesi harika! Ağırlık merkezi tam ortada, serbest bırakıldığında dik duracaktır.";
+                adviceBox.innerHTML = "✅ Kafa dengesi harika! Ağırlık merkezi tam ortada.";
             } else {
-                adviceBox.innerHTML = advice.join("<br>") + "<br>💡 <i>Yay yuvasını bu kayma yönüne doğru açarsanız kafa tam düz durur.</i>";
+                adviceBox.innerHTML = advice.join("<br>") + "<br>💡 <i>Yay çıkış yönünü doğru seçtikten sonra yuvayı bu yöne hizalayabilirsiniz.</i>";
             }
         }
 
-        // Yay Yuvası ve Denge Çizgisini Güncelleme
+        // Seçilen Yön Düzlemine Göre Yay Yuvasını Döndürme ve Konumlandırma
         function updateSpringVisuals() {
             if (!currentMesh || !modelBounds) return;
 
@@ -314,21 +321,52 @@
 
             const d = parseFloat(document.getElementById('springDiameter').value) || 6;
             const h = parseFloat(document.getElementById('springDepth').value) || 12;
+            const dir = document.getElementById('neckDirection').value;
 
-            // 1. Yeşil Yay Yuvası Silindiri
             const cylinderGeo = new THREE.CylinderGeometry(d / 2, d / 2, h, 16);
-            const cylinderMat = new THREE.MeshStandardMaterial({ color: 0x10b981, wireframe: false });
+            const cylinderMat = new THREE.MeshStandardMaterial({ color: 0x10b981 });
             springMesh = new THREE.Mesh(cylinderGeo, cylinderMat);
-            
-            // Yuvanın üst noktası tam ağırlık merkezinde olacak şekilde hizala
-            springMesh.position.set(currentCOG.x, currentCOG.y - (h / 2), currentCOG.z);
+
+            let offsetVector = new THREE.Vector3(0, -1, 0);
+            let rotationAxis = new THREE.Vector3(0, 0, 0);
+
+            // Seçilen Eksen Yönüne Göre Vektör ve Rotasyon Ayarı
+            switch(dir) {
+                case "-Y":
+                    offsetVector.set(0, -1, 0);
+                    // Standart Three.js silindiri zaten Y boyunca dikey durur
+                    springMesh.rotation.set(0, 0, 0);
+                    break;
+                case "+Y":
+                    offsetVector.set(0, 1, 0);
+                    springMesh.rotation.set(Math.PI, 0, 0);
+                    break;
+                case "-Z":
+                    offsetVector.set(0, 0, -1);
+                    springMesh.rotation.set(-Math.PI / 2, 0, 0);
+                    break;
+                case "+Z":
+                    offsetVector.set(0, 0, 1);
+                    springMesh.rotation.set(Math.PI / 2, 0, 0);
+                    break;
+                case "-X":
+                    offsetVector.set(-1, 0, 0);
+                    springMesh.rotation.set(0, 0, Math.PI / 2);
+                    break;
+                case "+X":
+                    offsetVector.set(1, 0, 0);
+                    springMesh.rotation.set(0, 0, -Math.PI / 2);
+                    break;
+            }
+
+            // Silindiri tabanı ağırlık merkezine oturacak şekilde offsetleme
+            const springPos = currentCOG.clone().add(offsetVector.clone().multiplyScalar(h / 2));
+            springMesh.position.copy(springPos);
             scene.add(springMesh);
 
-            // 2. Dikey Çekül / Denge Çizgisi (Sarı Kesikli Çizgi)
-            const linePoints = [
-                currentCOG,
-                new THREE.Vector3(currentCOG.x, modelBounds.min.z - 20, currentCOG.z)
-            ];
+            // Çekül Çizgisi (Seçilen Yönün Uzantısı)
+            const lineEnd = currentCOG.clone().add(offsetVector.clone().multiplyScalar(100));
+            const linePoints = [currentCOG, lineEnd];
             const lineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
             const lineMat = new THREE.LineDashedMaterial({
                 color: 0xfacc15,
