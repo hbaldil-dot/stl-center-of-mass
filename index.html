@@ -4,19 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>STL Ağırlık Merkezi Hesaplayıcı</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js, OrbitControls, STLLoader ve STLExporter -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
 </head>
 <body class="bg-slate-900 text-white min-h-screen flex flex-col md:flex-row h-screen overflow-hidden">
 
+    <!-- Sol Kontrol Paneli -->
     <div class="w-full md:w-1/3 p-6 bg-slate-800 flex flex-col gap-6 shadow-xl border-r border-slate-700 z-10 overflow-y-auto">
         <div>
             <h1 class="text-2xl font-bold text-indigo-400">STL Center of Mass</h1>
             <p class="text-slate-400 text-sm mt-1">3D modellerinizin kütle ve ağırlık merkezini canlı hesaplayın.</p>
         </div>
 
+        <!-- Yükleme Alanı -->
         <div class="flex flex-col gap-2">
             <label class="block text-sm font-medium text-slate-300">STL Dosyası Seçin</label>
             <input type="file" id="stlFile" accept=".stl" class="file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 text-slate-400 bg-slate-900 rounded-lg border border-slate-700 cursor-pointer">
@@ -25,11 +30,13 @@
             </button>
         </div>
 
+        <!-- Loading Durumu -->
         <div id="loading" class="hidden flex-col items-center justify-center p-4 bg-slate-900/50 rounded-lg border border-slate-700">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mb-2"></div>
             <p class="text-sm text-indigo-300 font-medium">STL Analiz Ediliyor...</p>
         </div>
 
+        <!-- Sonuç Kartı -->
         <div id="results" class="hidden flex-col gap-4 bg-slate-900 p-4 rounded-lg border border-slate-700">
             <h2 class="text-lg font-semibold text-emerald-400 border-b border-slate-800 pb-2">Analiz Sonuçları</h2>
             
@@ -55,9 +62,15 @@
                     </div>
                 </div>
             </div>
+
+            <!-- İndirme Butonu -->
+            <button onclick="downloadCombinedSTL()" id="btnDownload" class="mt-2 w-full bg-emerald-600 hover:bg-emerald-500 font-semibold py-2.5 px-4 rounded-lg transition duration-200 shadow-lg flex items-center justify-center gap-2">
+                💾 Küre Eklenmiş STL'i İndir
+            </button>
         </div>
     </div>
 
+    <!-- Sağ 3D Viewport -->
     <div id="canvas-container" class="w-full md:w-2/3 h-full relative bg-slate-950">
         <div class="absolute top-4 right-4 flex flex-col gap-2 items-end z-20">
             <div class="bg-slate-900/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-300 border border-slate-700 shadow-md">
@@ -70,9 +83,10 @@
     </div>
 
     <script>
-        const API_URL = "/analyze"; // Aynı sunucudaki endpoint
+        const API_URL = "/analyze";
         let scene, camera, renderer, controls, currentMesh, cogSphere;
         let isWireframe = false;
+        let uploadedFileName = "model";
 
         function init3D() {
             const container = document.getElementById('canvas-container');
@@ -126,6 +140,7 @@
             }
 
             const file = fileInput.files[0];
+            uploadedFileName = file.name.replace(/\.[^/.]+$/, ""); // Dosya adını uzantısız al
             const formData = new FormData();
             formData.append('file', file);
 
@@ -185,14 +200,15 @@
                 geometry.computeBoundingSphere();
                 const radius = geometry.boundingSphere.radius;
                 
-                const sphereGeo = new THREE.SphereGeometry(radius * 0.03, 32, 32);
-                const sphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                // Kırmızı Küreyi Hazırla
+                const sphereGeo = new THREE.SphereGeometry(radius * 0.04, 32, 32);
+                const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
                 cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
                 
                 cogSphere.position.set(cog.x_mm, cog.y_mm, cog.z_mm);
                 scene.add(cogSphere);
 
-                // Kamerayı ve görüş açısını dinamik ayarla
+                // Kamerayı ve görüş açısını ayarla
                 const center = geometry.boundingSphere.center;
                 controls.target.copy(center);
                 const distance = radius * 3;
@@ -201,6 +217,31 @@
                 controls.update();
             };
             reader.readAsArrayBuffer(file);
+        }
+
+        // Ana Model ile Kırmızı Küreyi Birlikte STL Olarak İndir
+        function downloadCombinedSTL() {
+            if (!currentMesh || !cogSphere) {
+                alert("İndirilecek model bulunamadı.");
+                return;
+            }
+
+            // İki nesneyi tutacak geçici grup oluştur
+            const exportGroup = new THREE.Group();
+            
+            // Nesnelerin kopyalarını ekle
+            exportGroup.add(currentMesh.clone());
+            exportGroup.add(cogSphere.clone());
+
+            const exporter = new THREE.STLExporter();
+            const result = exporter.parse(exportGroup, { binary: true });
+
+            // Tarayıcı üzerinden dosyayı indir
+            const blob = new Blob([result], { type: 'application/octet-stream' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${uploadedFileName}_with_center_of_mass.stl`;
+            link.click();
         }
 
         function toggleWireframe() {
