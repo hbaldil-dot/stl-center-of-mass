@@ -6,9 +6,10 @@
     <title>Bobblehead STL Ağırlık Merkezi & Denge Analizi</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Three.js, OrbitControls, STLLoader ve STLExporter -->
+    <!-- Three.js, OrbitControls, TransformControls, STLLoader ve STLExporter -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
 </head>
@@ -33,35 +34,35 @@
         <!-- Loading Göstergesi -->
         <div id="loading" class="hidden flex-col items-center justify-center p-4 bg-slate-900/50 rounded-lg border border-slate-700">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mb-2"></div>
-            <p class="text-sm text-indigo-300 font-medium">Hesapanıyor...</p>
+            <p class="text-sm text-indigo-300 font-medium">Hesaplanıyor...</p>
         </div>
 
         <!-- Duruş Açısı / Zemin Hizalama Paneli -->
         <div id="orientationControls" class="bg-slate-900/80 p-4 rounded-lg border border-slate-700 space-y-3">
-            <h3 class="text-sm font-semibold text-amber-400 border-b border-slate-800 pb-1">📐 Kafayı Zemine Hizala (Ağırlık Merkezinden Döndür)</h3>
-            <p class="text-xs text-slate-400">Model ağırlık merkezi sabitlemiş olarak kendi etrafında döner.</p>
+            <h3 class="text-sm font-semibold text-amber-400 border-b border-slate-800 pb-1">📐 Kafayı Zemine Hizala (Açı Ayarı)</h3>
+            <p class="text-xs text-slate-400">Ekranda beliren 3D halkaları fare ile tutarak veya aşağıdaki slider'lar ile açı verin.</p>
             
             <div class="space-y-2">
                 <div>
                     <div class="flex justify-between text-xs text-slate-300 mb-1">
-                        <span>X Açısı (Ön / Arka):</span>
+                        <span>X Açısı (Kırmızı Halka):</span>
                         <span id="rotXVal" class="font-mono text-indigo-400">0°</span>
                     </div>
-                    <input type="range" id="rotX" min="-180" max="180" value="0" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" oninput="updateModelOrientation()">
+                    <input type="range" id="rotX" min="-180" max="180" value="0" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" oninput="updateOrientationFromSliders()">
                 </div>
                 <div>
                     <div class="flex justify-between text-xs text-slate-300 mb-1">
-                        <span>Y Açısı (Yanlara Yatma):</span>
+                        <span>Y Açısı (Yeşil Halka):</span>
                         <span id="rotYVal" class="font-mono text-indigo-400">0°</span>
                     </div>
-                    <input type="range" id="rotY" min="-180" max="180" value="0" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" oninput="updateModelOrientation()">
+                    <input type="range" id="rotY" min="-180" max="180" value="0" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" oninput="updateOrientationFromSliders()">
                 </div>
                 <div>
                     <div class="flex justify-between text-xs text-slate-300 mb-1">
-                        <span>Z Açısı (Eksen Dönüşü):</span>
+                        <span>Z Açısı (Mavi Halka):</span>
                         <span id="rotZVal" class="font-mono text-indigo-400">0°</span>
                     </div>
-                    <input type="range" id="rotZ" min="-180" max="180" value="0" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" oninput="updateModelOrientation()">
+                    <input type="range" id="rotZ" min="-180" max="180" value="0" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" oninput="updateOrientationFromSliders()">
                 </div>
             </div>
             <button onclick="resetOrientation()" class="w-full text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 py-1 rounded border border-slate-700 transition">Açıları Sıfırla</button>
@@ -92,7 +93,7 @@
             </div>
 
             <div class="space-y-2">
-                <span class="text-slate-400 text-sm block">Ağırlık Merkezi Pozisyonu:</span>
+                <span class="text-slate-400 text-sm block">Ağırlık Merkezi (Plan Merkezinde):</span>
                 <div class="grid grid-cols-3 gap-2 text-center">
                     <div class="bg-slate-800 p-2 rounded border border-slate-700">
                         <span class="text-xs text-red-400 font-bold block">X</span>
@@ -120,10 +121,11 @@
     <div id="canvas-container" class="w-full md:w-2/3 h-full relative bg-slate-950">
         <div class="absolute top-4 right-4 flex flex-col gap-2 items-end z-20">
             <div class="bg-slate-900/90 backdrop-blur px-3 py-2 rounded text-xs text-slate-300 border border-slate-700 shadow-md space-y-1">
-                <div>🔴 Kırmızı Küre = Ağırlık Merkezi (Dönme Ekseni)</div>
+                <div>🎯 Obje ve Ağırlık Merkezi Planın Tam Merkezindedir</div>
+                <div>🔴 Kırmızı Küre = Ağırlık Merkezi</div>
                 <div>🟢 Yeşil Silindir = Dikey Yay Yuvası</div>
                 <div>🟡 Sarı Çizgi = Çekül / Denge Hattı</div>
-                <div>🏁 Tabandaki Izgara = Zemin Düzlemi</div>
+                <div>🔄 Renkli Halkalar = 3D Döndürme Gizmo'su</div>
             </div>
             <button onclick="toggleWireframe()" class="bg-slate-800 hover:bg-slate-700 text-xs text-indigo-300 font-semibold px-3 py-1.5 rounded border border-slate-600 shadow transition">
                 Görünüm: <span id="viewModeText">Şeffaf (Transparent)</span>
@@ -132,12 +134,13 @@
     </div>
 
     <script>
-        let scene, camera, renderer, controls, currentMesh, cogSphere, springMesh, plumbLine, gridHelper;
+        let scene, camera, renderer, orbitControls, transformControls;
+        let modelGroup, currentMesh, cogSphere, springMesh, plumbLine, gridHelper;
         let isWireframe = false;
         let uploadedFileName = "bobblehead_head";
         let rawGeometry = null;
         let initialCOG = new THREE.Vector3();
-        let currentCOG = new THREE.Vector3();
+        let volume_cm3 = 0;
 
         function init3D() {
             const container = document.getElementById('canvas-container');
@@ -152,13 +155,32 @@
             renderer.setSize(container.clientWidth, container.clientHeight);
             container.appendChild(renderer.domElement);
 
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
+            orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
+            orbitControls.enableDamping = true;
 
-            // Zemin Izgarası
+            // Zemin Izgarası (Merkez 0,0,0)
             gridHelper = new THREE.GridHelper(200, 20, 0x4f46e5, 0x334155);
             gridHelper.position.y = -50;
             scene.add(gridHelper);
+
+            // Dilimleyici Tipi TransformGizmo (Rotasyon Halkaları)
+            transformControls = new THREE.TransformControls(camera, renderer.domElement);
+            transformControls.setMode('rotate');
+            transformControls.setSize(0.8);
+            scene.add(transformControls);
+
+            // Gizmo ile çevirirken OrbitControls kilitlenmeli
+            transformControls.addEventListener('dragging-changed', function (event) {
+                orbitControls.enabled = !event.value;
+            });
+
+            // Gizmo çevrildikçe slider'ları ve dikey yay çizgilerini güncelle
+            transformControls.addEventListener('change', function () {
+                if (modelGroup) {
+                    syncSlidersFromModel();
+                    updateSpringVisuals();
+                }
+            });
 
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(ambientLight);
@@ -177,7 +199,7 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            controls.update();
+            orbitControls.update();
             renderer.render(scene, camera);
         }
 
@@ -249,13 +271,21 @@
                 reader.onload = function (e) {
                     const loader = new THREE.STLLoader();
                     rawGeometry = loader.parse(e.target.result);
-                    
-                    // İlk ağırlık merkezini bul
-                    const initialRes = calculateVolumeAndCOG(rawGeometry);
-                    initialCOG = initialRes.cog;
 
-                    resetOrientationInputs();
+                    // Sahneyi temizle
+                    if (modelGroup) scene.remove(modelGroup);
+                    transformControls.detach();
 
+                    // 1. Ağırlık merkezini hesapla
+                    const res = calculateVolumeAndCOG(rawGeometry);
+                    initialCOG = res.cog;
+                    volume_cm3 = res.volume_cm3;
+
+                    // 2. Modeli ağırlık merkezi (0,0,0) tam orijine gelecek şekilde merkeze oturt
+                    const centeredGeometry = rawGeometry.clone();
+                    centeredGeometry.translate(-initialCOG.x, -initialCOG.y, -initialCOG.z);
+
+                    // Model Objesi Oluştur
                     const material = new THREE.MeshStandardMaterial({ 
                         color: 0x6366f1, 
                         roughness: 0.3, 
@@ -265,21 +295,42 @@
                         wireframe: isWireframe
                     });
 
-                    if (currentMesh) scene.remove(currentMesh);
-                    currentMesh = new THREE.Mesh(rawGeometry.clone(), material);
-                    scene.add(currentMesh);
+                    currentMesh = new THREE.Mesh(centeredGeometry, material);
 
-                    recalculateAndDraw();
+                    // Ağırlık Merkezi Kırmızı Küresi (Artık Orijinde: 0,0,0)
+                    centeredGeometry.computeBoundingSphere();
+                    const radius = centeredGeometry.boundingSphere.radius;
+                    const sphereGeo = new THREE.SphereGeometry(radius * 0.03, 16, 16);
+                    const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                    cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
 
-                    currentMesh.geometry.computeBoundingSphere();
-                    const radius = currentMesh.geometry.boundingSphere.radius;
-                    gridHelper.position.y = currentMesh.geometry.boundingBox.min.y - 10;
+                    // Model ve Küreyi Ana Gruba Ekle
+                    modelGroup = new THREE.Group();
+                    modelGroup.add(currentMesh);
+                    modelGroup.add(cogSphere);
+                    scene.add(modelGroup);
 
-                    controls.target.copy(initialCOG);
+                    // Transform Gizmo'yu (Döndürme Halkalarını) Gruba Bağla
+                    transformControls.attach(modelGroup);
+
+                    // Zemin Izgarasını modelin en alt seviyesine taşı
+                    centeredGeometry.computeBoundingBox();
+                    gridHelper.position.y = centeredGeometry.boundingBox.min.y - 10;
+
+                    // Kamera Pozisyonu ve Odaklanma
+                    orbitControls.target.set(0, 0, 0);
                     const distance = radius * 2.8;
-                    camera.position.set(initialCOG.x + distance, initialCOG.y + distance, initialCOG.z + distance);
-                    camera.lookAt(initialCOG);
-                    controls.update();
+                    camera.position.set(distance, distance, distance);
+                    camera.lookAt(0, 0, 0);
+                    orbitControls.update();
+
+                    resetOrientationInputs();
+                    updateSpringVisuals();
+
+                    document.getElementById('resVolume').innerText = `${volume_cm3.toFixed(3)} cm³`;
+                    document.getElementById('resX').innerText = `0.00 mm`;
+                    document.getElementById('resY').innerText = `0.00 mm`;
+                    document.getElementById('resZ').innerText = `0.00 mm`;
 
                     document.getElementById('loading').classList.add('hidden');
                     document.getElementById('loading').classList.remove('flex');
@@ -290,9 +341,9 @@
             }, 50);
         }
 
-        // Modeli tam Ağırlık Merkezi etrafında döndürme mantığı
-        function updateModelOrientation() {
-            if (!currentMesh || !rawGeometry) return;
+        // Slider'lar hareket ettikçe 3D Modeli döndürür
+        function updateOrientationFromSliders() {
+            if (!modelGroup) return;
 
             const rx = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotX').value) || 0);
             const ry = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotY').value) || 0);
@@ -302,51 +353,27 @@
             document.getElementById('rotYVal').innerText = `${document.getElementById('rotY').value}°`;
             document.getElementById('rotZVal').innerText = `${document.getElementById('rotZ').value}°`;
 
-            const newGeo = rawGeometry.clone();
-            
-            // 1. Geometriyi orijine (Ağırlık merkezine) çek
-            newGeo.translate(-initialCOG.x, -initialCOG.y, -initialCOG.z);
-            
-            // 2. Ağırlık merkezi orijindeyken döndür
-            newGeo.rotateX(rx);
-            newGeo.rotateY(ry);
-            newGeo.rotateZ(rz);
-            
-            // 3. Tekrar eski konumuna taşı
-            newGeo.translate(initialCOG.x, initialCOG.y, initialCOG.z);
-
-            currentMesh.geometry.dispose();
-            currentMesh.geometry = newGeo;
-
-            recalculateAndDraw();
-        }
-
-        function recalculateAndDraw() {
-            currentMesh.geometry.computeBoundingBox();
-            const res = calculateVolumeAndCOG(currentMesh.geometry);
-            currentCOG = res.cog;
-
-            document.getElementById('resVolume').innerText = `${res.volume_cm3.toFixed(3)} cm³`;
-            document.getElementById('resX').innerText = `${res.cog.x.toFixed(2)} mm`;
-            document.getElementById('resY').innerText = `${res.cog.y.toFixed(2)} mm`;
-            document.getElementById('resZ').innerText = `${res.cog.z.toFixed(2)} mm`;
-
-            if (cogSphere) scene.remove(cogSphere);
-            currentMesh.geometry.computeBoundingSphere();
-            const radius = currentMesh.geometry.boundingSphere.radius;
-
-            // Kırmızı Küre
-            const sphereGeo = new THREE.SphereGeometry(radius * 0.03, 16, 16);
-            const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-            cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
-            cogSphere.position.copy(currentCOG);
-            scene.add(cogSphere);
-
+            modelGroup.rotation.set(rx, ry, rz);
             updateSpringVisuals();
         }
 
+        // 3D Halkalar (Gizmo) çevrildikçe Slider'ları günceller
+        function syncSlidersFromModel() {
+            const rx = Math.round(THREE.MathUtils.radToDeg(modelGroup.rotation.x));
+            const ry = Math.round(THREE.MathUtils.radToDeg(modelGroup.rotation.y));
+            const rz = Math.round(THREE.MathUtils.radToDeg(modelGroup.rotation.z));
+
+            document.getElementById('rotX').value = rx;
+            document.getElementById('rotY').value = ry;
+            document.getElementById('rotZ').value = rz;
+
+            document.getElementById('rotXVal').innerText = `${rx}°`;
+            document.getElementById('rotYVal').innerText = `${ry}°`;
+            document.getElementById('rotZVal').innerText = `${rz}°`;
+        }
+
         function updateSpringVisuals() {
-            if (!currentMesh) return;
+            if (!modelGroup) return;
 
             if (springMesh) scene.remove(springMesh);
             if (plumbLine) scene.remove(plumbLine);
@@ -354,18 +381,18 @@
             const d = parseFloat(document.getElementById('springDiameter').value) || 6;
             const h = parseFloat(document.getElementById('springDepth').value) || 12;
 
-            // Dikey Yuva Silindiri
+            // Dikey Yay Yuvası (Her zaman tam dikey (0,0,0)'dan aşağı iner)
             const cylinderGeo = new THREE.CylinderGeometry(d / 2, d / 2, h, 16);
             const cylinderMat = new THREE.MeshStandardMaterial({ color: 0x10b981 });
             springMesh = new THREE.Mesh(cylinderGeo, cylinderMat);
-
-            springMesh.position.set(currentCOG.x, currentCOG.y - (h / 2), currentCOG.z);
+            springMesh.position.set(0, -h / 2, 0);
             scene.add(springMesh);
 
             // Dikey Çekül Çizgisi
+            const minY = gridHelper.position.y - 20;
             const linePoints = [
-                currentCOG,
-                new THREE.Vector3(currentCOG.x, currentMesh.geometry.boundingBox.min.y - 30, currentCOG.z)
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(0, minY, 0)
             ];
             const lineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
             const lineMat = new THREE.LineDashedMaterial({
@@ -380,7 +407,7 @@
 
         function resetOrientationInputs() {
             document.getElementById('rotX').value = 0;
-            document.getElementById('rotY').value = 0;
+            document.getElementById('rotY].value = 0;
             document.getElementById('rotZ').value = 0;
             document.getElementById('rotXVal').innerText = "0°";
             document.getElementById('rotYVal').innerText = "0°";
@@ -388,19 +415,20 @@
         }
 
         function resetOrientation() {
+            if (modelGroup) modelGroup.rotation.set(0, 0, 0);
             resetOrientationInputs();
-            updateModelOrientation();
+            updateSpringVisuals();
         }
 
         function downloadCombinedSTL() {
-            if (!currentMesh || !cogSphere || !springMesh) {
+            if (!modelGroup || !springMesh) {
                 alert("İndirilecek model bulunamadı.");
                 return;
             }
 
+            // Döndürülmüş ve Hizalanmış Son Modeli Oluştur
             const exportGroup = new THREE.Group();
-            exportGroup.add(currentMesh.clone());
-            exportGroup.add(cogSphere.clone());
+            exportGroup.add(modelGroup.clone());
             exportGroup.add(springMesh.clone());
 
             const exporter = new THREE.STLExporter();
