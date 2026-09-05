@@ -269,72 +269,78 @@
                 const reader = new FileReader();
 
                 reader.onload = function (e) {
-                    const loader = new THREE.STLLoader();
-                    rawGeometry = loader.parse(e.target.result);
+                    try {
+                        const loader = new THREE.STLLoader();
+                        rawGeometry = loader.parse(e.target.result);
 
-                    // Sahneyi temizle
-                    if (modelGroup) scene.remove(modelGroup);
-                    transformControls.detach();
+                        // Sahneyi temizle
+                        if (modelGroup) scene.remove(modelGroup);
+                        transformControls.detach();
 
-                    // 1. Ağırlık merkezini hesapla
-                    const res = calculateVolumeAndCOG(rawGeometry);
-                    initialCOG = res.cog;
-                    volume_cm3 = res.volume_cm3;
+                        // 1. Ağırlık merkezini hesapla
+                        const res = calculateVolumeAndCOG(rawGeometry);
+                        initialCOG = res.cog;
+                        volume_cm3 = res.volume_cm3;
 
-                    // 2. Modeli ağırlık merkezi (0,0,0) tam orijine gelecek şekilde merkeze oturt
-                    const centeredGeometry = rawGeometry.clone();
-                    centeredGeometry.translate(-initialCOG.x, -initialCOG.y, -initialCOG.z);
+                        // 2. Modeli ağırlık merkezi (0,0,0) tam orijine gelecek şekilde merkeze oturt
+                        const centeredGeometry = rawGeometry.clone();
+                        centeredGeometry.translate(-initialCOG.x, -initialCOG.y, -initialCOG.z);
 
-                    // Model Objesi Oluştur
-                    const material = new THREE.MeshStandardMaterial({ 
-                        color: 0x6366f1, 
-                        roughness: 0.3, 
-                        metalness: 0.2,
-                        transparent: true,
-                        opacity: 0.5,
-                        wireframe: isWireframe
-                    });
+                        // Model Objesi Oluştur
+                        const material = new THREE.MeshStandardMaterial({ 
+                            color: 0x6366f1, 
+                            roughness: 0.3, 
+                            metalness: 0.2,
+                            transparent: true,
+                            opacity: 0.5,
+                            wireframe: isWireframe
+                        });
 
-                    currentMesh = new THREE.Mesh(centeredGeometry, material);
+                        currentMesh = new THREE.Mesh(centeredGeometry, material);
 
-                    // Ağırlık Merkezi Kırmızı Küresi (Artık Orijinde: 0,0,0)
-                    centeredGeometry.computeBoundingSphere();
-                    const radius = centeredGeometry.boundingSphere.radius;
-                    const sphereGeo = new THREE.SphereGeometry(radius * 0.03, 16, 16);
-                    const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-                    cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
+                        // Ağırlık Merkezi Kırmızı Küresi (Orijinde: 0,0,0)
+                        centeredGeometry.computeBoundingSphere();
+                        const radius = centeredGeometry.boundingSphere.radius;
+                        const sphereGeo = new THREE.SphereGeometry(radius * 0.03, 16, 16);
+                        const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                        cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
 
-                    // Model ve Küreyi Ana Gruba Ekle
-                    modelGroup = new THREE.Group();
-                    modelGroup.add(currentMesh);
-                    modelGroup.add(cogSphere);
-                    scene.add(modelGroup);
+                        // Model ve Küreyi Ana Gruba Ekle
+                        modelGroup = new THREE.Group();
+                        modelGroup.add(currentMesh);
+                        modelGroup.add(cogSphere);
+                        scene.add(modelGroup);
 
-                    // Transform Gizmo'yu (Döndürme Halkalarını) Gruba Bağla
-                    transformControls.attach(modelGroup);
+                        // Transform Gizmo'yu (Döndürme Halkalarını) Gruba Bağla
+                        transformControls.attach(modelGroup);
 
-                    // Zemin Izgarasını modelin en alt seviyesine taşı
-                    centeredGeometry.computeBoundingBox();
-                    gridHelper.position.y = centeredGeometry.boundingBox.min.y - 10;
+                        // Zemin Izgarasını modelin en alt seviyesine taşı
+                        centeredGeometry.computeBoundingBox();
+                        gridHelper.position.y = centeredGeometry.boundingBox.min.y - 10;
 
-                    // Kamera Pozisyonu ve Odaklanma
-                    orbitControls.target.set(0, 0, 0);
-                    const distance = radius * 2.8;
-                    camera.position.set(distance, distance, distance);
-                    camera.lookAt(0, 0, 0);
-                    orbitControls.update();
+                        // Kamera Pozisyonu ve Odaklanma
+                        orbitControls.target.set(0, 0, 0);
+                        const distance = radius * 2.8;
+                        camera.position.set(distance, distance, distance);
+                        camera.lookAt(0, 0, 0);
+                        orbitControls.update();
 
-                    resetOrientationInputs();
-                    updateSpringVisuals();
+                        resetOrientationInputs();
+                        updateSpringVisuals();
 
-                    document.getElementById('resVolume').innerText = `${volume_cm3.toFixed(3)} cm³`;
-                    document.getElementById('resX').innerText = `0.00 mm`;
-                    document.getElementById('resY').innerText = `0.00 mm`;
-                    document.getElementById('resZ').innerText = `0.00 mm`;
+                        document.getElementById('resVolume').innerText = `${volume_cm3.toFixed(3)} cm³`;
+                        document.getElementById('resX').innerText = `0.00 mm`;
+                        document.getElementById('resY').innerText = `0.00 mm`;
+                        document.getElementById('resZ').innerText = `0.00 mm`;
 
-                    document.getElementById('loading').classList.add('hidden');
-                    document.getElementById('loading').classList.remove('flex');
-                    document.getElementById('results').classList.remove('hidden');
+                        document.getElementById('results').classList.remove('hidden');
+                    } catch (err) {
+                        console.error("STL İşleme Hatası:", err);
+                        alert("STL dosyası işlenirken bir sorun oluştu.");
+                    } finally {
+                        document.getElementById('loading').classList.add('hidden');
+                        document.getElementById('loading').classList.remove('flex');
+                    }
                 };
 
                 reader.readAsArrayBuffer(file);
@@ -407,7 +413,7 @@
 
         function resetOrientationInputs() {
             document.getElementById('rotX').value = 0;
-            document.getElementById('rotY].value = 0;
+            document.getElementById('rotY').value = 0;
             document.getElementById('rotZ').value = 0;
             document.getElementById('rotXVal').innerText = "0°";
             document.getElementById('rotYVal').innerText = "0°";
