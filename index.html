@@ -33,13 +33,13 @@
         <!-- Loading Göstergesi -->
         <div id="loading" class="hidden flex-col items-center justify-center p-4 bg-slate-900/50 rounded-lg border border-slate-700">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mb-2"></div>
-            <p class="text-sm text-indigo-300 font-medium">Hesaplanıyor...</p>
+            <p class="text-sm text-indigo-300 font-medium">Hesapanıyor...</p>
         </div>
 
         <!-- Duruş Açısı / Zemin Hizalama Paneli -->
         <div id="orientationControls" class="bg-slate-900/80 p-4 rounded-lg border border-slate-700 space-y-3">
-            <h3 class="text-sm font-semibold text-amber-400 border-b border-slate-800 pb-1">📐 Kafayı Zemine Hizala (Döndür)</h3>
-            <p class="text-xs text-slate-400">Kafanın boyun kısmını aşağıdaki zemin ızgarasına paralel olacak şekilde döndürün.</p>
+            <h3 class="text-sm font-semibold text-amber-400 border-b border-slate-800 pb-1">📐 Kafayı Zemine Hizala (Ağırlık Merkezinden Döndür)</h3>
+            <p class="text-xs text-slate-400">Model ağırlık merkezi sabitlemiş olarak kendi etrafında döner.</p>
             
             <div class="space-y-2">
                 <div>
@@ -120,10 +120,10 @@
     <div id="canvas-container" class="w-full md:w-2/3 h-full relative bg-slate-950">
         <div class="absolute top-4 right-4 flex flex-col gap-2 items-end z-20">
             <div class="bg-slate-900/90 backdrop-blur px-3 py-2 rounded text-xs text-slate-300 border border-slate-700 shadow-md space-y-1">
-                <div>🔴 Kırmızı Küre = Ağırlık Merkezi</div>
+                <div>🔴 Kırmızı Küre = Ağırlık Merkezi (Dönme Ekseni)</div>
                 <div>🟢 Yeşil Silindir = Dikey Yay Yuvası</div>
                 <div>🟡 Sarı Çizgi = Çekül / Denge Hattı</div>
-                <div>🏁 ⏹️ Tabandaki Izgara = Zemin Düzlemi</div>
+                <div>🏁 Tabandaki Izgara = Zemin Düzlemi</div>
             </div>
             <button onclick="toggleWireframe()" class="bg-slate-800 hover:bg-slate-700 text-xs text-indigo-300 font-semibold px-3 py-1.5 rounded border border-slate-600 shadow transition">
                 Görünüm: <span id="viewModeText">Şeffaf (Transparent)</span>
@@ -136,6 +136,7 @@
         let isWireframe = false;
         let uploadedFileName = "bobblehead_head";
         let rawGeometry = null;
+        let initialCOG = new THREE.Vector3();
         let currentCOG = new THREE.Vector3();
 
         function init3D() {
@@ -154,7 +155,7 @@
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
 
-            // Zemin Izgarası (Grid Helper)
+            // Zemin Izgarası
             gridHelper = new THREE.GridHelper(200, 20, 0x4f46e5, 0x334155);
             gridHelper.position.y = -50;
             scene.add(gridHelper);
@@ -249,7 +250,10 @@
                     const loader = new THREE.STLLoader();
                     rawGeometry = loader.parse(e.target.result);
                     
-                    // Açıları sıfırla
+                    // İlk ağırlık merkezini bul
+                    const initialRes = calculateVolumeAndCOG(rawGeometry);
+                    initialCOG = initialRes.cog;
+
                     resetOrientationInputs();
 
                     const material = new THREE.MeshStandardMaterial({ 
@@ -271,11 +275,10 @@
                     const radius = currentMesh.geometry.boundingSphere.radius;
                     gridHelper.position.y = currentMesh.geometry.boundingBox.min.y - 10;
 
-                    const center = currentMesh.geometry.boundingSphere.center;
-                    controls.target.copy(center);
+                    controls.target.copy(initialCOG);
                     const distance = radius * 2.8;
-                    camera.position.set(center.x + distance, center.y + distance, center.z + distance);
-                    camera.lookAt(center);
+                    camera.position.set(initialCOG.x + distance, initialCOG.y + distance, initialCOG.z + distance);
+                    camera.lookAt(initialCOG);
                     controls.update();
 
                     document.getElementById('loading').classList.add('hidden');
@@ -287,7 +290,7 @@
             }, 50);
         }
 
-        // Modeli verilen açılara göre döndürüp ağırlık merkezini yeniden hesaplar
+        // Modeli tam Ağırlık Merkezi etrafında döndürme mantığı
         function updateModelOrientation() {
             if (!currentMesh || !rawGeometry) return;
 
@@ -299,11 +302,18 @@
             document.getElementById('rotYVal').innerText = `${document.getElementById('rotY').value}°`;
             document.getElementById('rotZVal').innerText = `${document.getElementById('rotZ').value}°`;
 
-            // Orijinal geometriyi kopyalayıp döndürüyoruz
             const newGeo = rawGeometry.clone();
+            
+            // 1. Geometriyi orijine (Ağırlık merkezine) çek
+            newGeo.translate(-initialCOG.x, -initialCOG.y, -initialCOG.z);
+            
+            // 2. Ağırlık merkezi orijindeyken döndür
             newGeo.rotateX(rx);
             newGeo.rotateY(ry);
             newGeo.rotateZ(rz);
+            
+            // 3. Tekrar eski konumuna taşı
+            newGeo.translate(initialCOG.x, initialCOG.y, initialCOG.z);
 
             currentMesh.geometry.dispose();
             currentMesh.geometry = newGeo;
@@ -344,16 +354,15 @@
             const d = parseFloat(document.getElementById('springDiameter').value) || 6;
             const h = parseFloat(document.getElementById('springDepth').value) || 12;
 
-            // Yay Yuvası Her Zaman Tam Dikey (-Y Yönü) Oluşturulur
+            // Dikey Yuva Silindiri
             const cylinderGeo = new THREE.CylinderGeometry(d / 2, d / 2, h, 16);
             const cylinderMat = new THREE.MeshStandardMaterial({ color: 0x10b981 });
             springMesh = new THREE.Mesh(cylinderGeo, cylinderMat);
 
-            // Ağırlık merkezinden dikey olarak aşağıya uzatılır
             springMesh.position.set(currentCOG.x, currentCOG.y - (h / 2), currentCOG.z);
             scene.add(springMesh);
 
-            // Zemin Düzlemine İnen Dikey Çekül Çizgisi
+            // Dikey Çekül Çizgisi
             const linePoints = [
                 currentCOG,
                 new THREE.Vector3(currentCOG.x, currentMesh.geometry.boundingBox.min.y - 30, currentCOG.z)
