@@ -36,23 +36,40 @@
             <p class="text-sm text-indigo-300 font-medium">Hesaplanıyor...</p>
         </div>
 
-        <!-- Yay ve Yön Ayarları Paneli -->
-        <div id="springControls" class="bg-slate-900/80 p-4 rounded-lg border border-slate-700 space-y-4">
-            <h3 class="text-sm font-semibold text-indigo-300 border-b border-slate-800 pb-1">⚙️ Yay Yuvası & Boyun Yönü</h3>
+        <!-- Duruş Açısı / Zemin Hizalama Paneli -->
+        <div id="orientationControls" class="bg-slate-900/80 p-4 rounded-lg border border-slate-700 space-y-3">
+            <h3 class="text-sm font-semibold text-amber-400 border-b border-slate-800 pb-1">📐 Kafayı Zemine Hizala (Döndür)</h3>
+            <p class="text-xs text-slate-400">Kafanın boyun kısmını aşağıdaki zemin ızgarasına paralel olacak şekilde döndürün.</p>
             
-            <!-- Boyun/Yay Çıkış Yönü Seçimi -->
-            <div>
-                <label class="text-xs text-slate-400 block mb-1 font-medium">Boyun/Yay Çıkış Yönü:</label>
-                <select id="neckDirection" onchange="updateSpringVisuals()" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm font-semibold text-emerald-400 focus:outline-none focus:border-indigo-500">
-                    <option value="-Z" selected>Aşağı (-Z Eksenı)</option>
-                    <option value="+Z">Yukarı (+Z Ekseni)</option>
-                    <option value="-Y">Aşağı (-Y Ekseni)</option>
-                    <option value="+Y">Yukarı (+Y Ekseni)</option>
-                    <option value="-X">Sol (-X Ekseni)</option>
-                    <option value="+X">Sağ (+X Ekseni)</option>
-                </select>
+            <div class="space-y-2">
+                <div>
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>X Açısı (Ön / Arka):</span>
+                        <span id="rotXVal" class="font-mono text-indigo-400">0°</span>
+                    </div>
+                    <input type="range" id="rotX" min="-180" max="180" value="0" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" oninput="updateModelOrientation()">
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Y Açısı (Yanlara Yatma):</span>
+                        <span id="rotYVal" class="font-mono text-indigo-400">0°</span>
+                    </div>
+                    <input type="range" id="rotY" min="-180" max="180" value="0" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" oninput="updateModelOrientation()">
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Z Açısı (Eksen Dönüşü):</span>
+                        <span id="rotZVal" class="font-mono text-indigo-400">0°</span>
+                    </div>
+                    <input type="range" id="rotZ" min="-180" max="180" value="0" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" oninput="updateModelOrientation()">
+                </div>
             </div>
+            <button onclick="resetOrientation()" class="w-full text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 py-1 rounded border border-slate-700 transition">Açıları Sıfırla</button>
+        </div>
 
+        <!-- Yay Yuvası Ayarları Paneli -->
+        <div id="springControls" class="bg-slate-900/80 p-4 rounded-lg border border-slate-700 space-y-3">
+            <h3 class="text-sm font-semibold text-indigo-300 border-b border-slate-800 pb-1">⚙️ Yay Yuvası Ölçüleri</h3>
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="text-xs text-slate-400 block mb-1">Yay Çapı (mm)</label>
@@ -72,12 +89,6 @@
             <div class="flex justify-between items-center">
                 <span class="text-slate-400 text-sm">Hacim:</span>
                 <span id="resVolume" class="font-mono text-white font-bold">0 cm³</span>
-            </div>
-
-            <!-- Akıllı Denge Tavsiyesi -->
-            <div id="balanceAdvice" class="p-3 bg-amber-950/40 border border-amber-600/50 rounded-lg text-xs text-amber-200 space-y-1">
-                <span class="font-bold text-amber-400 block">⚠️ Denge Analizi:</span>
-                <p id="adviceText">Model analiz ediliyor...</p>
             </div>
 
             <div class="space-y-2">
@@ -100,7 +111,7 @@
 
             <!-- İndirme Butonu -->
             <button onclick="downloadCombinedSTL()" id="btnDownload" class="mt-2 w-full bg-emerald-600 hover:bg-emerald-500 font-semibold py-2.5 px-4 rounded-lg transition duration-200 shadow-lg flex items-center justify-center gap-2">
-                💾 İşaretli & Yay Yuvam ile STL İndir
+                💾 Doğru Açıda Hizalanmış & Yay Yuvam ile STL İndir
             </button>
         </div>
     </div>
@@ -110,8 +121,9 @@
         <div class="absolute top-4 right-4 flex flex-col gap-2 items-end z-20">
             <div class="bg-slate-900/90 backdrop-blur px-3 py-2 rounded text-xs text-slate-300 border border-slate-700 shadow-md space-y-1">
                 <div>🔴 Kırmızı Küre = Ağırlık Merkezi</div>
-                <div>🟢 Yeşil Silindir = Seçilen Yöne Yay Yuvası</div>
+                <div>🟢 Yeşil Silindir = Dikey Yay Yuvası</div>
                 <div>🟡 Sarı Çizgi = Çekül / Denge Hattı</div>
+                <div>🏁 ⏹️ Tabandaki Izgara = Zemin Düzlemi</div>
             </div>
             <button onclick="toggleWireframe()" class="bg-slate-800 hover:bg-slate-700 text-xs text-indigo-300 font-semibold px-3 py-1.5 rounded border border-slate-600 shadow transition">
                 Görünüm: <span id="viewModeText">Şeffaf (Transparent)</span>
@@ -120,11 +132,11 @@
     </div>
 
     <script>
-        let scene, camera, renderer, controls, currentMesh, cogSphere, springMesh, plumbLine;
+        let scene, camera, renderer, controls, currentMesh, cogSphere, springMesh, plumbLine, gridHelper;
         let isWireframe = false;
         let uploadedFileName = "bobblehead_head";
+        let rawGeometry = null;
         let currentCOG = new THREE.Vector3();
-        let modelBounds = null;
 
         function init3D() {
             const container = document.getElementById('canvas-container');
@@ -141,6 +153,11 @@
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
+
+            // Zemin Izgarası (Grid Helper)
+            gridHelper = new THREE.GridHelper(200, 20, 0x4f46e5, 0x334155);
+            gridHelper.position.y = -50;
+            scene.add(gridHelper);
 
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(ambientLight);
@@ -230,25 +247,10 @@
 
                 reader.onload = function (e) {
                     const loader = new THREE.STLLoader();
-                    const geometry = loader.parse(e.target.result);
-
-                    const res = calculateVolumeAndCOG(geometry);
-                    currentCOG = res.cog;
-
-                    geometry.computeBoundingBox();
-                    modelBounds = geometry.boundingBox;
-
-                    generateBalanceAdvice(modelBounds, currentCOG);
-
-                    document.getElementById('resVolume').innerText = `${res.volume_cm3.toFixed(3)} cm³`;
-                    document.getElementById('resX').innerText = `${res.cog.x.toFixed(2)} mm`;
-                    document.getElementById('resY').innerText = `${res.cog.y.toFixed(2)} mm`;
-                    document.getElementById('resZ').innerText = `${res.cog.z.toFixed(2)} mm`;
-
-                    if (currentMesh) scene.remove(currentMesh);
-                    if (cogSphere) scene.remove(cogSphere);
-                    if (springMesh) scene.remove(springMesh);
-                    if (plumbLine) scene.remove(plumbLine);
+                    rawGeometry = loader.parse(e.target.result);
+                    
+                    // Açıları sıfırla
+                    resetOrientationInputs();
 
                     const material = new THREE.MeshStandardMaterial({ 
                         color: 0x6366f1, 
@@ -258,21 +260,18 @@
                         opacity: 0.5,
                         wireframe: isWireframe
                     });
-                    currentMesh = new THREE.Mesh(geometry, material);
+
+                    if (currentMesh) scene.remove(currentMesh);
+                    currentMesh = new THREE.Mesh(rawGeometry.clone(), material);
                     scene.add(currentMesh);
 
-                    geometry.computeBoundingSphere();
-                    const radius = geometry.boundingSphere.radius;
-                    
-                    const sphereGeo = new THREE.SphereGeometry(radius * 0.03, 16, 16);
-                    const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-                    cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
-                    cogSphere.position.copy(currentCOG);
-                    scene.add(cogSphere);
+                    recalculateAndDraw();
 
-                    updateSpringVisuals();
+                    currentMesh.geometry.computeBoundingSphere();
+                    const radius = currentMesh.geometry.boundingSphere.radius;
+                    gridHelper.position.y = currentMesh.geometry.boundingBox.min.y - 10;
 
-                    const center = geometry.boundingSphere.center;
+                    const center = currentMesh.geometry.boundingSphere.center;
                     controls.target.copy(center);
                     const distance = radius * 2.8;
                     camera.position.set(center.x + distance, center.y + distance, center.z + distance);
@@ -288,85 +287,77 @@
             }, 50);
         }
 
-        function generateBalanceAdvice(bounds, cog) {
-            const geoCenter = new THREE.Vector3();
-            bounds.getCenter(geoCenter);
+        // Modeli verilen açılara göre döndürüp ağırlık merkezini yeniden hesaplar
+        function updateModelOrientation() {
+            if (!currentMesh || !rawGeometry) return;
 
-            const dx = cog.x - geoCenter.x;
-            const dy = cog.y - geoCenter.y;
+            const rx = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotX').value) || 0);
+            const ry = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotY').value) || 0);
+            const rz = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotZ').value) || 0);
 
-            let advice = [];
+            document.getElementById('rotXVal').innerText = `${document.getElementById('rotX').value}°`;
+            document.getElementById('rotYVal').innerText = `${document.getElementById('rotY').value}°`;
+            document.getElementById('rotZVal').innerText = `${document.getElementById('rotZ').value}°`;
 
-            if (Math.abs(dx) > 1.5) {
-                advice.push(`Ağırlık merkezi X ekseninde <b>${Math.abs(dx).toFixed(1)}mm ${dx > 0 ? 'Sağa' : 'Sola'}</b> kaymış.`);
-            }
-            if (Math.abs(dy) > 1.5) {
-                advice.push(`Ağırlık merkezi Y ekseninde <b>${Math.abs(dy).toFixed(1)}mm ${dy > 0 ? 'Öne' : 'Arkaya'}</b> kaymış.`);
-            }
+            // Orijinal geometriyi kopyalayıp döndürüyoruz
+            const newGeo = rawGeometry.clone();
+            newGeo.rotateX(rx);
+            newGeo.rotateY(ry);
+            newGeo.rotateZ(rz);
 
-            const adviceBox = document.getElementById('adviceText');
-            if (advice.length === 0) {
-                adviceBox.innerHTML = "✅ Kafa dengesi harika! Ağırlık merkezi tam ortada.";
-            } else {
-                adviceBox.innerHTML = advice.join("<br>") + "<br>💡 <i>Yay çıkış yönünü doğru seçtikten sonra yuvayı bu yöne hizalayabilirsiniz.</i>";
-            }
+            currentMesh.geometry.dispose();
+            currentMesh.geometry = newGeo;
+
+            recalculateAndDraw();
         }
 
-        // Seçilen Yön Düzlemine Göre Yay Yuvasını Döndürme ve Konumlandırma
+        function recalculateAndDraw() {
+            currentMesh.geometry.computeBoundingBox();
+            const res = calculateVolumeAndCOG(currentMesh.geometry);
+            currentCOG = res.cog;
+
+            document.getElementById('resVolume').innerText = `${res.volume_cm3.toFixed(3)} cm³`;
+            document.getElementById('resX').innerText = `${res.cog.x.toFixed(2)} mm`;
+            document.getElementById('resY').innerText = `${res.cog.y.toFixed(2)} mm`;
+            document.getElementById('resZ').innerText = `${res.cog.z.toFixed(2)} mm`;
+
+            if (cogSphere) scene.remove(cogSphere);
+            currentMesh.geometry.computeBoundingSphere();
+            const radius = currentMesh.geometry.boundingSphere.radius;
+
+            // Kırmızı Küre
+            const sphereGeo = new THREE.SphereGeometry(radius * 0.03, 16, 16);
+            const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+            cogSphere = new THREE.Mesh(sphereGeo, sphereMat);
+            cogSphere.position.copy(currentCOG);
+            scene.add(cogSphere);
+
+            updateSpringVisuals();
+        }
+
         function updateSpringVisuals() {
-            if (!currentMesh || !modelBounds) return;
+            if (!currentMesh) return;
 
             if (springMesh) scene.remove(springMesh);
             if (plumbLine) scene.remove(plumbLine);
 
             const d = parseFloat(document.getElementById('springDiameter').value) || 6;
             const h = parseFloat(document.getElementById('springDepth').value) || 12;
-            const dir = document.getElementById('neckDirection').value;
 
+            // Yay Yuvası Her Zaman Tam Dikey (-Y Yönü) Oluşturulur
             const cylinderGeo = new THREE.CylinderGeometry(d / 2, d / 2, h, 16);
             const cylinderMat = new THREE.MeshStandardMaterial({ color: 0x10b981 });
             springMesh = new THREE.Mesh(cylinderGeo, cylinderMat);
 
-            let offsetVector = new THREE.Vector3(0, -1, 0);
-            let rotationAxis = new THREE.Vector3(0, 0, 0);
-
-            // Seçilen Eksen Yönüne Göre Vektör ve Rotasyon Ayarı
-            switch(dir) {
-                case "-Y":
-                    offsetVector.set(0, -1, 0);
-                    // Standart Three.js silindiri zaten Y boyunca dikey durur
-                    springMesh.rotation.set(0, 0, 0);
-                    break;
-                case "+Y":
-                    offsetVector.set(0, 1, 0);
-                    springMesh.rotation.set(Math.PI, 0, 0);
-                    break;
-                case "-Z":
-                    offsetVector.set(0, 0, -1);
-                    springMesh.rotation.set(-Math.PI / 2, 0, 0);
-                    break;
-                case "+Z":
-                    offsetVector.set(0, 0, 1);
-                    springMesh.rotation.set(Math.PI / 2, 0, 0);
-                    break;
-                case "-X":
-                    offsetVector.set(-1, 0, 0);
-                    springMesh.rotation.set(0, 0, Math.PI / 2);
-                    break;
-                case "+X":
-                    offsetVector.set(1, 0, 0);
-                    springMesh.rotation.set(0, 0, -Math.PI / 2);
-                    break;
-            }
-
-            // Silindiri tabanı ağırlık merkezine oturacak şekilde offsetleme
-            const springPos = currentCOG.clone().add(offsetVector.clone().multiplyScalar(h / 2));
-            springMesh.position.copy(springPos);
+            // Ağırlık merkezinden dikey olarak aşağıya uzatılır
+            springMesh.position.set(currentCOG.x, currentCOG.y - (h / 2), currentCOG.z);
             scene.add(springMesh);
 
-            // Çekül Çizgisi (Seçilen Yönün Uzantısı)
-            const lineEnd = currentCOG.clone().add(offsetVector.clone().multiplyScalar(100));
-            const linePoints = [currentCOG, lineEnd];
+            // Zemin Düzlemine İnen Dikey Çekül Çizgisi
+            const linePoints = [
+                currentCOG,
+                new THREE.Vector3(currentCOG.x, currentMesh.geometry.boundingBox.min.y - 30, currentCOG.z)
+            ];
             const lineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
             const lineMat = new THREE.LineDashedMaterial({
                 color: 0xfacc15,
@@ -376,6 +367,20 @@
             plumbLine = new THREE.Line(lineGeo, lineMat);
             plumbLine.computeLineDistances();
             scene.add(plumbLine);
+        }
+
+        function resetOrientationInputs() {
+            document.getElementById('rotX').value = 0;
+            document.getElementById('rotY').value = 0;
+            document.getElementById('rotZ').value = 0;
+            document.getElementById('rotXVal').innerText = "0°";
+            document.getElementById('rotYVal').innerText = "0°";
+            document.getElementById('rotZVal').innerText = "0°";
+        }
+
+        function resetOrientation() {
+            resetOrientationInputs();
+            updateModelOrientation();
         }
 
         function downloadCombinedSTL() {
@@ -395,7 +400,7 @@
             const blob = new Blob([result], { type: 'application/octet-stream' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `${uploadedFileName}_with_spring_socket.stl`;
+            link.download = `${uploadedFileName}_aligned_with_socket.stl`;
             link.click();
         }
 
